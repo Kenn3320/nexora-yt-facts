@@ -1,0 +1,36 @@
+name: 🧪 Test YouTube Facts Generator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install edge-tts requests
+
+      - name: Generate script + voiceover
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python generate_facts.py
+
+      - name: Upload result as artifact (buat di-cek)
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-facts-test
+          path: yt_output/
+          retention-days: 3
