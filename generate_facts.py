@@ -15,7 +15,7 @@ OUTPUT_DIR   = Path("yt_output")
 # Niche: fakta unik tech & AI — bisa diganti sesuai mood/niche lain
 NICHE = "technology and artificial intelligence"
 
-VOICE = "en-US-GuyNeural"  # suara TTS — bisa diganti, list voice di edge-tts
+VOICE = "en-US-JennyNeural"  # suara TTS — natural, clear, cocok buat fact content
 
 
 def generate_script() -> dict:
