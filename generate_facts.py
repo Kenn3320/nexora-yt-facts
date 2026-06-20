@@ -44,8 +44,11 @@ Balas HANYA dengan JSON valid format ini, tanpa teks lain:
 {{
   "title": "judul singkat yang catchy buat video (max 60 karakter)",
   "script": "script narasi lengkap sebagai satu string",
-  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
-}}"""
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "visual_keywords": ["english keyword 1", "english keyword 2", "english keyword 3"]
+}}
+
+Catatan untuk visual_keywords: berikan 3 kata kunci dalam BAHASA INGGRIS yang cocok untuk mencari stock footage video di Pexels yang merepresentasikan topik fakta ini secara visual (misal: "artificial intelligence", "brain technology", "computer code"). Urutkan dari yang paling relevan."""
 
     payload = {
         "model": "llama-3.3-70b-versatile",
