@@ -13,9 +13,9 @@ GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 OUTPUT_DIR   = Path("yt_output")
 
 # Niche: fakta unik tech & AI — bisa diganti sesuai mood/niche lain
-NICHE = "technology and artificial intelligence"
+NICHE = "teknologi dan kecerdasan buatan (AI)"
 
-VOICE = "en-US-JennyNeural"  # suara TTS — natural, clear, cocok buat fact content
+VOICE = "id-ID-ArdiNeural"  # suara TTS Indonesia — natural, cocok buat narasi fakta
 
 
 def generate_script() -> dict:
@@ -25,25 +25,25 @@ def generate_script() -> dict:
         "Content-Type": "application/json"
     }
 
-    system_prompt = f"""You are a scriptwriter for a YouTube Shorts channel about surprising {NICHE} facts.
+    system_prompt = f"""Kamu adalah penulis script untuk channel YouTube Shorts tentang fakta-fakta {NICHE} yang mengejutkan.
 
-Write ONE short script following this exact structure:
-1. HOOK (first sentence) — must grab attention immediately, create curiosity or disbelief
-2. FACT — the core surprising fact, explained clearly
-3. CONTEXT — 1-2 sentences of why it matters or a surprising implication
-4. OUTRO — a short engaging closing line (NOT "like and subscribe", make it thought-provoking)
+Tulis SATU script pendek dengan struktur ini:
+1. HOOK (kalimat pertama) — harus langsung menarik perhatian, bikin penasaran atau kaget
+2. FAKTA — fakta utama yang mengejutkan, dijelaskan dengan jelas
+3. KONTEKS — 1-2 kalimat tentang kenapa ini penting atau implikasi mengejutkannya
+4. OUTRO — kalimat penutup pendek yang engaging (JANGAN "like and subscribe", buat yang bikin orang mikir)
 
-Rules:
-- Total script: 110-140 words (fits ~45 seconds spoken aloud)
-- Conversational, natural spoken English — NOT written/formal tone
-- No emojis, no hashtags in the script itself
-- Make it feel like a knowledgeable friend telling you something wild
-- The fact must be genuinely interesting, specific, and ideally not super commonly known
+Aturan:
+- Total script: 110-140 kata (pas buat ~45 detik narasi)
+- Bahasa Indonesia santai, gaya ngomong natural — JANGAN bahasa formal/tulisan
+- Tanpa emoji, tanpa hashtag di dalam script
+- Bikin kayak temen yang ngerti banyak hal lagi cerita sesuatu yang gila
+- Faktanya harus benar-benar menarik, spesifik, dan idealnya bukan yang udah umum diketahui
 
-Return ONLY valid JSON in this exact format, nothing else:
+Balas HANYA dengan JSON valid format ini, tanpa teks lain:
 {{
-  "title": "short catchy title for the video (max 60 chars)",
-  "script": "the full narration script as one string",
+  "title": "judul singkat yang catchy buat video (max 60 karakter)",
+  "script": "script narasi lengkap sebagai satu string",
   "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
 }}"""
 
@@ -51,7 +51,7 @@ Return ONLY valid JSON in this exact format, nothing else:
         "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "Generate one fact script now."}
+            {"role": "user", "content": "Buatkan satu script fakta sekarang."}
         ],
         "temperature": 1.0,
         "max_tokens": 600
