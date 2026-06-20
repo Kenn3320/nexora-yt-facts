@@ -47,10 +47,15 @@ def search_pexels_video(keyword: str) -> str | None:
 
         video = videos[0]
         files = video.get("video_files", [])
-        # Prioritaskan kualitas sd biar download cepat (tetap di-scale ke 1080x1920 nanti)
-        sd_files = [f for f in files if f.get("quality") == "sd"]
-        chosen = sd_files[0] if sd_files else (files[0] if files else None)
-        return chosen["link"] if chosen else None
+        if not files:
+            return None
+
+        # Prioritaskan resolusi yang cukup tinggi (minimal width 720) biar ga blur
+        # saat di-scale ke 1080x1920. Urutkan dari yang paling mendekati 1080 width.
+        good_files = [f for f in files if f.get("width", 0) >= 720]
+        candidates = good_files if good_files else files
+        chosen = min(candidates, key=lambda f: abs(f.get("width", 0) - 1080))
+        return chosen["link"]
 
     except Exception as e:
         print(f"   ⚠️  Pexels search error untuk '{keyword}': {e}")
@@ -65,17 +70,66 @@ def download_file(url: str, out_path: Path):
             f.write(chunk)
 
 
-def get_stock_footage(keywords: list) -> Path | None:
-    """Coba tiap keyword sampai dapet video yang valid."""
-    for kw in keywords:
+def get_stock_footage_multi(keywords: list, max_clips: int = 3, clip_duration: int = 12) -> Path | None:
+    """Download beberapa clip dari keyword berbeda, gabung jadi 1 background yang berganti-ganti."""
+    downloaded = []
+    for i, kw in enumerate(keywords[:max_clips]):
         print(f"   🔍 Searching Pexels: '{kw}'...")
         url = search_pexels_video(kw)
         if url:
-            out_path = OUTPUT_DIR / "stock_clip.mp4"
-            print(f"   ⬇️  Downloading clip...")
-            download_file(url, out_path)
-            return out_path
-    return None
+            raw_path = OUTPUT_DIR / f"raw_clip_{i}.mp4"
+            print(f"   ⬇️  Downloading clip {i+1}...")
+            try:
+                download_file(url, raw_path)
+                downloaded.append(raw_path)
+            except Exception as e:
+                print(f"   ⚠️  Gagal download clip {i+1}: {e}")
+
+    if not downloaded:
+        return None
+
+    # Normalize tiap clip: scale+crop ke 1080x1920, potong durasi tetap, re-encode konsisten
+    # biar bisa di-concat dengan aman (codec/resolusi/fps harus sama).
+    normalized = []
+    for i, raw in enumerate(downloaded):
+        norm_path = OUTPUT_DIR / f"norm_clip_{i}.mp4"
+        cmd = [
+            "ffmpeg", "-y", "-i", str(raw),
+            "-t", str(clip_duration),
+            "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps=30",
+            "-an",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            str(norm_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            normalized.append(norm_path)
+        else:
+            print(f"   ⚠️  Gagal normalize clip {i+1}: {result.stderr[-500:]}")
+
+    if not normalized:
+        return None
+
+    # Gabung semua clip jadi 1 sequence yang berganti-ganti
+    concat_list_path = OUTPUT_DIR / "concat_list.txt"
+    with open(concat_list_path, "w") as f:
+        for p in normalized:
+            f.write(f"file '{p.resolve()}'\n")
+
+    sequence_path = OUTPUT_DIR / "background_sequence.mp4"
+    cmd = [
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", str(concat_list_path),
+        "-c", "copy",
+        str(sequence_path)
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print("FFMPEG CONCAT ERROR:", result.stderr[-1000:])
+        return None
+
+    print(f"   ✅ {len(normalized)} clip digabung jadi 1 sequence")
+    return sequence_path
 
 
 # ─── FALLBACK: GENERATED BACKGROUND ──────────────────────────
@@ -241,7 +295,7 @@ def main():
 
     if PEXELS_API_KEY and keywords:
         print("🎥 Mencari stock footage di Pexels...")
-        clip_path = get_stock_footage(keywords)
+        clip_path = get_stock_footage_multi(keywords)
 
     if clip_path:
         print("🎬 Rendering dengan stock footage...")
