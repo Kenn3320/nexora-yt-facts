@@ -1,63 +1,70 @@
 """
-Nexora Labs - YouTube Shorts Fact Generator
-Script (Groq) + Voiceover (edge-tts, gratis) + caption timing
+Nexora Labs - YouTube Shorts Ranking Generator
+Format: Top 5 ranking list (hewan lucu/absurd)
+Script per item (Groq) + Voiceover per segmen (edge-tts) + concat
 """
 
 import os
 import json
 import asyncio
+import subprocess
 import requests
 from pathlib import Path
 
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 OUTPUT_DIR   = Path("yt_output")
 
-# Niche: fakta unik tech & AI — bisa diganti sesuai mood/niche lain
-NICHE = "teknologi dan kecerdasan buatan (AI)"
-
-VOICE = "id-ID-ArdiNeural"  # suara TTS Indonesia — natural, cocok buat narasi fakta
+NICHE = "momen hewan paling lucu dan absurd"
+VOICE = "id-ID-ArdiNeural"
 
 
-def generate_script() -> dict:
-    """Generate fact script pakai Groq — dioptimasi buat ~45 detik narasi."""
+def generate_ranking() -> dict:
+    """Generate struktur ranking Top 5 pakai Groq."""
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
 
-    system_prompt = f"""Kamu adalah penulis script untuk channel YouTube Shorts tentang fakta-fakta {NICHE} yang mengejutkan.
+    system_prompt = f"""Kamu adalah penulis script untuk channel YouTube Shorts ranking "Top 5" tentang {NICHE}.
 
-Tulis SATU script pendek dengan struktur ini:
-1. HOOK (kalimat pertama) — harus langsung menarik perhatian, bikin penasaran atau kaget
-2. FAKTA — fakta utama yang mengejutkan, dijelaskan dengan jelas
-3. KONTEKS — 1-2 kalimat tentang kenapa ini penting atau implikasi mengejutkannya
-4. OUTRO — kalimat penutup pendek yang engaging (JANGAN "like and subscribe", buat yang bikin orang mikir)
+PENTING: Ini channel HEWAN tanpa wajah manusia sama sekali — fokus ke tingkah laku hewan yang lucu, absurd, atau ga terduga.
+
+Buat struktur ranking dengan urutan dari #5 (paling biasa) sampai #1 (PALING absurd/lucu, klimaks di akhir).
+
+Untuk tiap item, kasih:
+- "label": teks singkat max 5 kata buat list overlay (contoh: "Kucing Takut Timun")
+- "script": 1-2 kalimat narasi santai buat item ini, bikin penasaran, Bahasa Indonesia natural
+- "visual_keyword": keyword BAHASA INGGRIS generik buat cari stock footage di Pexels (contoh: "cat funny scared", "dog playing water") — jangan terlalu spesifik karena harus ketemu video asli di stock footage
 
 Aturan:
-- Total script: 110-140 kata (pas buat ~45 detik narasi)
-- Bahasa Indonesia santai, gaya ngomong natural — JANGAN bahasa formal/tulisan
-- Tanpa emoji, tanpa hashtag di dalam script
-- Bikin kayak temen yang ngerti banyak hal lagi cerita sesuatu yang gila
-- Faktanya harus benar-benar menarik, spesifik, dan idealnya bukan yang udah umum diketahui
+- Bahasa Indonesia santai, gaya cerita ke temen
+- Tanpa emoji dalam script (boleh di label)
+- Item harus ngalir dari yang "lumayan lucu" ke yang "paling gila/absurd"
+- Intro dan outro pendek, jangan "like and subscribe"
 
 Balas HANYA dengan JSON valid format ini, tanpa teks lain:
 {{
-  "title": "judul singkat yang catchy buat video (max 60 karakter)",
-  "script": "script narasi lengkap sebagai satu string",
-  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "visual_keywords": ["english keyword 1", "english keyword 2", "english keyword 3"]
-}}
-
-Catatan untuk visual_keywords: berikan 3 kata kunci dalam BAHASA INGGRIS yang cocok untuk mencari stock footage video di Pexels yang merepresentasikan topik fakta ini secara visual (misal: "artificial intelligence", "brain technology", "computer code"). Urutkan dari yang paling relevan."""
+  "title": "judul singkat catchy (max 50 karakter)",
+  "intro": "1-2 kalimat pembuka yang bikin penasaran",
+  "items": [
+    {{"rank": 5, "label": "...", "script": "...", "visual_keyword": "..."}},
+    {{"rank": 4, "label": "...", "script": "...", "visual_keyword": "..."}},
+    {{"rank": 3, "label": "...", "script": "...", "visual_keyword": "..."}},
+    {{"rank": 2, "label": "...", "script": "...", "visual_keyword": "..."}},
+    {{"rank": 1, "label": "...", "script": "...", "visual_keyword": "..."}}
+  ],
+  "outro": "kalimat penutup pendek yang engaging",
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+}}"""
 
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "Buatkan satu script fakta sekarang."}
+            {"role": "user", "content": "Buatkan satu ranking Top 5 sekarang."}
         ],
         "temperature": 1.0,
-        "max_tokens": 600
+        "max_tokens": 1200
     }
 
     resp = requests.post(
@@ -70,29 +77,16 @@ Catatan untuk visual_keywords: berikan 3 kata kunci dalam BAHASA INGGRIS yang co
     return json.loads(raw)
 
 
-async def generate_voiceover(text: str, out_path: Path) -> list:
-    """Generate voiceover pakai edge-tts (gratis) + ambil word-timing buat caption."""
+async def generate_segment_audio(text: str, out_path: Path):
     import edge_tts
-
     communicate = edge_tts.Communicate(text, VOICE, rate="+5%")
-    word_boundaries = []
-
     with open(out_path, "wb") as f:
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 f.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                word_boundaries.append({
-                    "text": chunk["text"],
-                    "offset": chunk["offset"] / 10_000_000,   # ke detik
-                    "duration": chunk["duration"] / 10_000_000
-                })
-
-    return word_boundaries
 
 
 def get_audio_duration(path: Path) -> float:
-    import subprocess
     result = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
@@ -101,51 +95,74 @@ def get_audio_duration(path: Path) -> float:
     return float(result.stdout.strip())
 
 
-def estimate_word_timings(text: str, duration: float) -> list:
-    """Fallback kalau voice ga support WordBoundary — estimasi rata berdasarkan panjang kata."""
-    words = text.split()
-    total_chars = sum(len(w) for w in words) or 1
-    timings = []
-    t = 0.0
-    for w in words:
-        weight = len(w) / total_chars
-        dur = weight * duration
-        timings.append({"text": w, "offset": t, "duration": dur})
-        t += dur
-    return timings
-
-
 def main():
-    print("🚀 YouTube Facts Generator starting...")
+    print("🚀 Ranking Generator starting...")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    print("📝 Generating script via Groq...")
-    data = generate_script()
+    print("📝 Generating ranking structure via Groq...")
+    data = generate_ranking()
     print(f"   Title: {data['title']}")
-    print(f"   Script ({len(data['script'].split())} words): {data['script'][:80]}...")
 
-    # Simpan script + metadata
     with open(OUTPUT_DIR / "script.json", "w") as f:
         json.dump(data, f, indent=2)
 
-    print("🔊 Generating voiceover (edge-tts)...")
-    audio_path = OUTPUT_DIR / "voiceover.mp3"
-    word_boundaries = asyncio.run(generate_voiceover(data["script"], audio_path))
-    print(f"   Audio saved: {audio_path}")
-    print(f"   Word timings captured: {len(word_boundaries)} words")
+    # Susun urutan segmen: intro -> item5 -> item4 -> ... -> item1 -> outro
+    items_sorted = sorted(data["items"], key=lambda x: -x["rank"])  # 5,4,3,2,1
+    segment_defs = [{"type": "intro", "text": data["intro"]}]
+    for item in items_sorted:
+        segment_defs.append({
+            "type": "item", "rank": item["rank"], "label": item["label"],
+            "visual_keyword": item["visual_keyword"], "text": item["script"]
+        })
+    segment_defs.append({"type": "outro", "text": data["outro"]})
 
-    # Fallback: kalau voice ga ngirim WordBoundary, estimasi manual
-    if not word_boundaries:
-        print("   ⚠️  No WordBoundary data — pakai estimasi manual")
-        duration = get_audio_duration(audio_path)
-        word_boundaries = estimate_word_timings(data["script"], duration)
-        print(f"   Estimated {len(word_boundaries)} word timings dari durasi {duration:.1f}s")
+    print("🔊 Generating voiceover per segmen...")
+    audio_dir = OUTPUT_DIR / "segments"
+    audio_dir.mkdir(exist_ok=True)
 
-    # Simpan timing buat caption sync nanti
-    with open(OUTPUT_DIR / "word_timings.json", "w") as f:
-        json.dump(word_boundaries, f, indent=2)
+    segments = []
+    current_offset = 0.0
+    concat_lines = []
 
-    print("✅ Done! Script + voiceover ready in yt_output/")
+    for i, seg in enumerate(segment_defs):
+        seg_path = audio_dir / f"seg_{i}.mp3"
+        asyncio.run(generate_segment_audio(seg["text"], seg_path))
+        dur = get_audio_duration(seg_path)
+
+        entry = {
+            "type": seg["type"],
+            "start": current_offset,
+            "end": current_offset + dur,
+            "duration": dur
+        }
+        if seg["type"] == "item":
+            entry["rank"] = seg["rank"]
+            entry["label"] = seg["label"]
+            entry["visual_keyword"] = seg["visual_keyword"]
+
+        segments.append(entry)
+        concat_lines.append(f"file '{seg_path.resolve()}'")
+        current_offset += dur
+        print(f"   Segmen {i} ({seg['type']}): {dur:.1f}s")
+
+    # Gabung semua audio segmen jadi 1 file voiceover utuh
+    concat_list_path = audio_dir / "concat_list.txt"
+    with open(concat_list_path, "w") as f:
+        f.write("\n".join(concat_lines))
+
+    final_audio_path = OUTPUT_DIR / "voiceover.mp3"
+    cmd = [
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", str(concat_list_path), "-c", "copy", str(final_audio_path)
+    ]
+    subprocess.run(cmd, capture_output=True, text=True)
+
+    with open(OUTPUT_DIR / "segments.json", "w") as f:
+        json.dump(segments, f, indent=2)
+
+    print(f"✅ Done! Total durasi: {current_offset:.1f}s")
+    print(f"   Audio: {final_audio_path}")
+    print(f"   Segments: {OUTPUT_DIR / 'segments.json'}")
 
 
 if __name__ == "__main__":
