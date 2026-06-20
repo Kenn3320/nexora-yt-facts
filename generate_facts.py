@@ -88,6 +88,30 @@ async def generate_voiceover(text: str, out_path: Path) -> list:
     return word_boundaries
 
 
+def get_audio_duration(path: Path) -> float:
+    import subprocess
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        capture_output=True, text=True
+    )
+    return float(result.stdout.strip())
+
+
+def estimate_word_timings(text: str, duration: float) -> list:
+    """Fallback kalau voice ga support WordBoundary — estimasi rata berdasarkan panjang kata."""
+    words = text.split()
+    total_chars = sum(len(w) for w in words) or 1
+    timings = []
+    t = 0.0
+    for w in words:
+        weight = len(w) / total_chars
+        dur = weight * duration
+        timings.append({"text": w, "offset": t, "duration": dur})
+        t += dur
+    return timings
+
+
 def main():
     print("🚀 YouTube Facts Generator starting...")
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -106,6 +130,13 @@ def main():
     word_boundaries = asyncio.run(generate_voiceover(data["script"], audio_path))
     print(f"   Audio saved: {audio_path}")
     print(f"   Word timings captured: {len(word_boundaries)} words")
+
+    # Fallback: kalau voice ga ngirim WordBoundary, estimasi manual
+    if not word_boundaries:
+        print("   ⚠️  No WordBoundary data — pakai estimasi manual")
+        duration = get_audio_duration(audio_path)
+        word_boundaries = estimate_word_timings(data["script"], duration)
+        print(f"   Estimated {len(word_boundaries)} word timings dari durasi {duration:.1f}s")
 
     # Simpan timing buat caption sync nanti
     with open(OUTPUT_DIR / "word_timings.json", "w") as f:
