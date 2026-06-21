@@ -1,6 +1,6 @@
 """
-Nexora Labs - YouTube Shorts Video Renderer
-Format: Top 5 ranking list — visual per item (Pexels) + list overlay progresif
+Nexora Labs - YouTube Shorts Video Renderer (No Narration)
+Top 5 ranking — visual per item (Pexels) + list overlay progresif + title highlight
 """
 
 import os
@@ -9,13 +9,16 @@ import subprocess
 from pathlib import Path
 
 import requests
+from PIL import ImageFont
 
 OUTPUT_DIR     = Path("yt_output")
 W, H           = 1080, 1920
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
 FONT           = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+DEFAULT_KEYWORD = "funny animals playing"
 
-DEFAULT_KEYWORD = "funny animals playing"  # buat intro/outro
+TITLE_SIZE = 58
+HIGHLIGHT_COLOR = "#f59e0b"
 
 
 # ─── PEXELS ──────────────────────────────────────────────────
@@ -50,7 +53,6 @@ def download_file(url: str, out_path: Path):
 
 
 def get_clip_for_segment(keyword: str, duration: float, out_path: Path) -> bool:
-    """Download + normalize 1 clip biar pas durasinya sama persis sama segmen narasi."""
     url = search_pexels_video(keyword)
     if not url:
         return False
@@ -62,7 +64,6 @@ def get_clip_for_segment(keyword: str, duration: float, out_path: Path) -> bool:
         print(f"   ⚠️  Download gagal: {e}")
         return False
 
-    # stream_loop biar kalau clip lebih pendek dari durasi yang dibutuhkan, otomatis diulang
     cmd = [
         "ffmpeg", "-y", "-stream_loop", "-1", "-i", str(raw_path),
         "-t", str(duration),
@@ -80,7 +81,6 @@ def get_clip_for_segment(keyword: str, duration: float, out_path: Path) -> bool:
 
 
 def build_background_sequence(segments: list) -> Path:
-    """Download clip per segmen (durasi pas), gabung jadi 1 video utuh."""
     clips_dir = OUTPUT_DIR / "clips"
     clips_dir.mkdir(exist_ok=True)
 
@@ -95,11 +95,9 @@ def build_background_sequence(segments: list) -> Path:
         if not ok:
             print(f"   ⚠️  Fallback ke default keyword...")
             ok = get_clip_for_segment(DEFAULT_KEYWORD, duration, clip_path)
-
-        if ok:
-            clip_paths.append(clip_path)
-        else:
+        if not ok:
             raise RuntimeError(f"Gagal dapat clip buat segmen {i}")
+        clip_paths.append(clip_path)
 
     concat_list_path = OUTPUT_DIR / "concat_list.txt"
     with open(concat_list_path, "w") as f:
@@ -115,32 +113,70 @@ def build_background_sequence(segments: list) -> Path:
     if result.returncode != 0:
         print("FFMPEG CONCAT ERROR:", result.stderr[-1000:])
         raise RuntimeError("Gagal gabung clip jadi sequence")
-
     return sequence_path
 
 
 # ─── TEXT OVERLAY ────────────────────────────────────────────
 def escape_text(text: str) -> str:
-    """Escape karakter spesial buat ffmpeg drawtext."""
     return (text.replace("\\", "\\\\\\\\")
                 .replace(":", "\\:")
                 .replace("'", "\u2019")
                 .replace("%", "\\%"))
 
 
-def build_overlay_filters(title: str, segments: list) -> str:
-    """Bikin chain drawtext: title + nomor persisten + label yang reveal progresif."""
-    filters = []
+def measure_width(text: str, size: int) -> int:
+    font = ImageFont.truetype(FONT, size)
+    bbox = font.getbbox(text)
+    return bbox[2] - bbox[0]
 
-    # Title di atas (selalu tampil)
-    title_esc = escape_text(title.upper())
-    filters.append(
-        f"drawtext=fontfile={FONT}:text='{title_esc}':fontcolor=white:fontsize=58:"
-        f"x=(w-text_w)/2:y=90:box=1:boxcolor=black@0.45:boxborderw=20"
+
+def build_title_filters(before: str, highlight: str, after: str) -> list:
+    """Title 1 baris dengan 1 kata di-highlight warna beda, center. Auto-shrink kalau kepanjangan."""
+    parts = []
+    if before.strip():
+        parts.append((before.strip() + " ", "white"))
+    parts.append((highlight.strip(), HIGHLIGHT_COLOR))
+    if after.strip():
+        parts.append((" " + after.strip(), "white"))
+
+    max_width = W - 120  # margin kiri-kanan 60px
+    size = TITLE_SIZE
+    widths = [measure_width(text.upper(), size) for text, _ in parts]
+    total_width = sum(widths)
+
+    # Auto-shrink font kalau melebihi lebar layar
+    if total_width > max_width:
+        scale = max_width / total_width
+        size = max(28, int(size * scale))
+        widths = [measure_width(text.upper(), size) for text, _ in parts]
+        total_width = sum(widths)
+
+    start_x = max(20, (W - total_width) // 2)
+    box_pad = 18
+    box_h   = size + box_pad * 2
+
+    filters = [
+        f"drawbox=x={start_x - box_pad}:y={100 - box_pad}:"
+        f"w={total_width + box_pad*2}:h={box_h}:color=black@0.45:t=fill"
+    ]
+    cursor_x = start_x
+    for (text, color), w in zip(parts, widths):
+        esc = escape_text(text.upper())
+        filters.append(
+            f"drawtext=fontfile={FONT}:text='{esc}':fontcolor={color}:fontsize={size}:"
+            f"x={cursor_x}:y=100"
+        )
+        cursor_x += w
+
+    return filters
+
+
+def build_overlay_filters(script_data: dict, segments: list) -> str:
+    filters = build_title_filters(
+        script_data["title_before"], script_data["title_highlight"], script_data["title_after"]
     )
 
     item_segments = [s for s in segments if s["type"] == "item"]
-    # Urutkan tampilan dari rank 1 (atas) ke rank 5 (bawah)
     item_segments_display = sorted(item_segments, key=lambda x: x["rank"])
 
     list_y_start = 280
@@ -150,37 +186,34 @@ def build_overlay_filters(title: str, segments: list) -> str:
         y = list_y_start + idx * row_height
         rank = seg["rank"]
 
-        # Nomor — selalu tampil dari awal
         filters.append(
-            f"drawtext=fontfile={FONT}:text='{rank}.':fontcolor=#f59e0b:fontsize=64:"
+            f"drawtext=fontfile={FONT}:text='{rank}.':fontcolor={HIGHLIGHT_COLOR}:fontsize=64:"
             f"x=60:y={y}"
         )
 
-        # Label — reveal begitu narasi item ini mulai, tetap tampil sampai akhir
-        label_esc = escape_text(seg["label"].upper())
+        caption_esc = escape_text(seg["caption"].upper())
         reveal_time = seg["start"]
         filters.append(
-            f"drawtext=fontfile={FONT}:text='{label_esc}':fontcolor=white:fontsize=48:"
+            f"drawtext=fontfile={FONT}:text='{caption_esc}':fontcolor=white:fontsize=46:"
             f"x=160:y={y+8}:enable='gte(t,{reveal_time:.2f})'"
         )
 
     return ",".join(filters)
 
 
-# ─── FINAL RENDER ────────────────────────────────────────────
-def render_final(bg_path: Path, audio_path: Path, overlay_filters: str) -> Path:
+# ─── FINAL RENDER (tanpa voiceover, audio diam) ───────────────
+def render_final(bg_path: Path, overlay_filters: str, total_duration: float) -> Path:
     out_path = OUTPUT_DIR / "final_video.mp4"
-
     vf = f"format=yuv420p,{overlay_filters}"
 
     cmd = [
         "ffmpeg", "-y",
         "-i", str(bg_path),
-        "-i", str(audio_path),
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-vf", vf,
         "-c:v", "libx264", "-preset", "fast", "-crf", "20",
         "-c:a", "aac", "-b:a", "128k",
-        "-shortest",
+        "-t", str(total_duration),
         str(out_path)
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -191,23 +224,23 @@ def render_final(bg_path: Path, audio_path: Path, overlay_filters: str) -> Path:
 
 
 def main():
-    print("🚀 Video Renderer (Ranking format) starting...")
+    print("🚀 Video Renderer (No Narration) starting...")
 
     with open(OUTPUT_DIR / "script.json") as f:
         script_data = json.load(f)
     with open(OUTPUT_DIR / "segments.json") as f:
         segments = json.load(f)
 
-    audio_path = OUTPUT_DIR / "voiceover.mp3"
+    total_duration = segments[-1]["end"]
 
     print("🎥 Membangun background sequence dari Pexels...")
     bg_path = build_background_sequence(segments)
 
     print("💬 Menyusun overlay ranking list...")
-    overlay_filters = build_overlay_filters(script_data["title"], segments)
+    overlay_filters = build_overlay_filters(script_data, segments)
 
     print("🎬 Rendering final video...")
-    final_path = render_final(bg_path, audio_path, overlay_filters)
+    final_path = render_final(bg_path, overlay_filters, total_duration)
 
     print(f"✅ Done! Final video: {final_path}")
 
