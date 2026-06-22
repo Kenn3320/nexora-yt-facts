@@ -23,8 +23,9 @@ HIGHLIGHT_COLOR = "#f59e0b"
 
 # ─── PEXELS ──────────────────────────────────────────────────
 def search_pexels_video(keyword: str) -> str | None:
+    import random
     headers = {"Authorization": PEXELS_API_KEY}
-    params  = {"query": keyword, "orientation": "portrait", "per_page": 5, "size": "medium"}
+    params  = {"query": keyword, "orientation": "portrait", "per_page": 6, "size": "medium"}
     try:
         resp = requests.get("https://api.pexels.com/videos/search",
                              headers=headers, params=params, timeout=20)
@@ -32,7 +33,12 @@ def search_pexels_video(keyword: str) -> str | None:
         videos = resp.json().get("videos", [])
         if not videos:
             return None
-        files = videos[0].get("video_files", [])
+
+        # Random pick dari top 3 biar lebih variatif (bukan selalu hasil pertama)
+        candidates_videos = videos[:3] if len(videos) >= 3 else videos
+        video = random.choice(candidates_videos)
+
+        files = video.get("video_files", [])
         if not files:
             return None
         good_files = [f for f in files if f.get("width", 0) >= 720]
