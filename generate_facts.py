@@ -11,7 +11,7 @@ from pathlib import Path
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 OUTPUT_DIR   = Path("yt_output")
 
-NICHE = "momen hewan paling lucu dan absurd"
+NICHE = "momen hewan paling menggemaskan dan bikin gemes"
 
 # Durasi fix per segmen (detik) — ga lagi ngikutin panjang narasi
 INTRO_DURATION = 2.0
@@ -27,21 +27,21 @@ def generate_ranking() -> dict:
 
     system_prompt = f"""Kamu adalah penulis caption untuk channel YouTube Shorts ranking "Top 5" tentang {NICHE}.
 
-PENTING: Video ini TANPA narasi/voiceover sama sekali — cuma musik dan caption singkat reaktif (mirip caption di video TikTok compilation kucing/hewan lucu).
+PENTING: Video ini TANPA narasi/voiceover sama sekali — cuma musik dan caption singkat reaktif (mirip caption di video TikTok compilation hewan menggemaskan).
 
-Buat struktur ranking dari #5 (lumayan lucu) sampai #1 (PALING absurd, klimaks di akhir).
+Buat struktur ranking dari #5 (lumayan gemes) sampai #1 (PALING menggemaskan, klimaks di akhir).
 
 Untuk title, pecah jadi 3 bagian:
 - "title_before": bagian sebelum kata yang di-highlight
 - "title_highlight": SATU kata yang mau dikasih warna beda (biasanya nama hewan, contoh: "KUCING")
 - "title_after": bagian setelah kata yang di-highlight
-(Total title harus singkat, max 40 karakter, contoh: "RANKING MOMEN [KUCING] PALING ABSURD")
+(Total title harus singkat, max 40 karakter, contoh: "RANKING MOMEN [KUCING] PALING MENGGEMASKAN")
 
 Untuk tiap item, kasih:
-- "caption": caption SUPER PENDEK 1-3 kata gaya reaktif/meme (contoh: "Jumpscare", "Dead Inside", "Plot Twist", "Gak Masuk Akal", "Bukan Salah Gue") — JANGAN kalimat deskriptif panjang
-- "visual_keyword": keyword BAHASA INGGRIS yang menggambarkan AKSI/GERAKAN dinamis, BUKAN pose statis. WAJIB pakai kata kerja aktif seperti: jumping, falling, running, chasing, zoomies, playing, surprised, startled, slipping, climbing, splashing. Contoh BAGUS: "dog zoomies funny", "cat falls off bed", "puppy slipping floor", "kitten attacking toy". Contoh BURUK (hindari): "cat sitting", "dog portrait", "rabbit looking" — ini menghasilkan footage diam/membosankan.
+- "caption": caption SUPER PENDEK 1-3 kata gaya reaktif buat momen menggemaskan (contoh: "Gemes Banget", "Hati Meleleh", "Bikin Baper", "Nggak Kuat", "Lucu Parah", "My Heart") — JANGAN kalimat deskriptif panjang
+- "visual_keyword": keyword BAHASA INGGRIS yang menggambarkan momen lembut/menggemaskan dengan sedikit gerakan natural. WAJIB pakai frasa yang umum ada di stock footage hewan: "puppy playing cute", "kitten cuddling", "baby animal sleeping", "puppy yawning", "kitten licking paw", "rabbit eating cute", "puppy wagging tail". Hindari keyword statis kayak "cat sitting" doang — tetap butuh sedikit gerakan biar ga monoton.
 
-PENTING: Caption dan visual_keyword harus SELARAS — kalau caption "Jumpscare" maka keyword harus action yang bikin kaget (contoh: "cat startled jumping"), bukan keyword pasif.
+PENTING: Caption dan visual_keyword harus SELARAS dengan tone menggemaskan, bukan absurd/kaget.
 
 Balas HANYA dengan JSON valid format ini, tanpa teks lain:
 {{
