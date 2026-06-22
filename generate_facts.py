@@ -39,7 +39,9 @@ Untuk title, pecah jadi 3 bagian:
 
 Untuk tiap item, kasih:
 - "caption": caption SUPER PENDEK 1-3 kata gaya reaktif/meme (contoh: "Jumpscare", "Dead Inside", "Plot Twist", "Gak Masuk Akal", "Bukan Salah Gue") — JANGAN kalimat deskriptif panjang
-- "visual_keyword": keyword BAHASA INGGRIS generik buat cari stock footage di Pexels (contoh: "cat funny", "dog playing water", "hamster running") — harus generik biar ketemu stock footage asli
+- "visual_keyword": keyword BAHASA INGGRIS yang menggambarkan AKSI/GERAKAN dinamis, BUKAN pose statis. WAJIB pakai kata kerja aktif seperti: jumping, falling, running, chasing, zoomies, playing, surprised, startled, slipping, climbing, splashing. Contoh BAGUS: "dog zoomies funny", "cat falls off bed", "puppy slipping floor", "kitten attacking toy". Contoh BURUK (hindari): "cat sitting", "dog portrait", "rabbit looking" — ini menghasilkan footage diam/membosankan.
+
+PENTING: Caption dan visual_keyword harus SELARAS — kalau caption "Jumpscare" maka keyword harus action yang bikin kaget (contoh: "cat startled jumping"), bukan keyword pasif.
 
 Balas HANYA dengan JSON valid format ini, tanpa teks lain:
 {{
